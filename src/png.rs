@@ -6,8 +6,9 @@ use std::fs;
 use std::io::{BufReader, Read};
 use std::path::Path;
 use std::str::FromStr;
+use std::fs::File;
 
-use crate::{Error, Result};
+use crate::{Result};
 use crate::chunk::Chunk;
 use crate::chunk_type::ChunkType;
 
@@ -33,7 +34,15 @@ impl Png {
 
     /// Creates a `Png` from a file path
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
-        todo!()
+        let mut f = File::open(path)?;
+
+        let mut v: Vec<u8> = vec!();
+
+        for byte in f.bytes() {
+            v.push(byte.unwrap());
+        }
+
+        Ok(Png::try_from(&v[..]).expect("error reading bytes"))
     }
 
     /// Appends a chunk to the end of this `Png` file's `Chunk` list.
@@ -85,19 +94,72 @@ impl Png {
 }
 
 impl TryFrom<&[u8]> for Png {
-    type Error = Error;
+    type Error = &'static str;
 
-    fn try_from(bytes: &[u8]) -> Result<Png> {
+    fn try_from(bytes: &[u8]) -> std::result::Result<Self, Self::Error> {
+
         let mut reader = BufReader::new(bytes);
-        let mut buffer: [u8; 4] = [0, 0, 0, 0];
+        
+        let mut header = [0; 8];
 
-        reader.read_exact(&mut buffer).expect("error reading bytes");
-        let data_length = u32::from_be_bytes(buffer);
+        reader.read_exact(&mut header).expect("error reading header");
 
-        // need read bytes
+        if header != Png::STANDARD_HEADER {
+            return Err("Wrong Header!!!");
+        }
 
+        let mut chunks: Vec<Chunk> = Vec::new();
+
+        loop {
+            let mut buf = [0; 4];
+            
+            let bytes_read = match reader.read(&mut buf) {
+                Ok(0) => break, // end-of-file
+                Ok(n) => n,
+                Err(e) => panic!("error reading file!")
+            };
+
+            println!("{}", bytes_read);
+
+            let mut data_count: u32 = 0;
+            let data_length = u32::from_be_bytes(buf);
+            let mut chunk_type: ChunkType = ChunkType::try_from([0; 4]).unwrap();
+            let mut chunk: Vec<u8> = vec![];
+
+            if data_length == 0 {
+                continue;
+            }
+
+            let size = data_length as usize;
+            let mut b = vec![0u8; size];
+
+            let mut header_reader = false;
+            while data_length > data_count {
+
+                if header_reader == false {
+                    let b_reads = reader.read(&mut buf).expect("error reading chunk");
+                    chunk_type = ChunkType::try_from(buf).unwrap();
+                    header_reader = true;
+                }else {
+                    let b_reads = reader.read(&mut b).expect("error reading chunk");
+                    chunk.append(&mut b);
+                    data_count += b_reads as u32;
+                }
+            }
+            
+            let p = Chunk::new(chunk_type, chunk);
+            
+            let b_reads = reader.read(&mut buf).expect("error reading ccc");
+
+            if u32::from_be_bytes(buf) != p.crc() {
+                return Err("chunk type error");
+            }
+
+            chunks.push(p);
+        }
+        
         Ok(Png{
-            chunks: vec!(Chunk::try_from(b"as"))
+            chunks: chunks
         })
     }
 }

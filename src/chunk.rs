@@ -15,15 +15,21 @@ use crate::chunk_type::ChunkType;
 pub struct Chunk {
     chunk_type: ChunkType,
     data: Vec<u8>,
+    crc: [u8; 4],
 }
 
 #[allow(dead_code)]
 impl Chunk {
     pub fn new(chunk_type: ChunkType, data: Vec<u8>) -> Chunk {
-        Chunk {
+        let mut c = Chunk {
             chunk_type,
-            data
-        }
+            data: data,
+            crc: [0; 4]
+        };
+
+        c.crc = c.crc().to_be_bytes();
+
+        c
     }
 
     /// The length of the data portion of this chunk.
@@ -64,13 +70,10 @@ impl Chunk {
     /// 4. The CRC of the chunk type and data *(4 bytes)*
     pub fn as_bytes(&self) -> Vec<u8> {
         let mut all: Vec<u8> = self.data.len().to_be_bytes().to_vec();
-        
         all.append(&mut self.chunk_type.bytes().to_vec());
-
         all.append(&mut self.data.clone());
-
+        all.append(&mut self.crc.to_vec());
         all
-        
     }
 }
 
@@ -91,10 +94,7 @@ impl TryFrom<&[u8]> for Chunk {
             return Err("chunk type error");
         }        
 
-        let chunk = Chunk {
-            chunk_type,
-            data: bytes[8..bytes.len()-4].to_vec()
-        };
+        let chunk = Chunk::new(chunk_type, bytes[8..bytes.len()-4].to_vec());
 
         let crc: [u8; 4] = bytes[bytes.len()-4..].try_into().expect("error");
 
