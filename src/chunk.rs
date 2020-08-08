@@ -49,11 +49,13 @@ impl Chunk {
 
     /// The CRC of this chunk
     pub fn crc(&self) -> u32 {
-        let mut all: String = String::from_utf8(self.data.clone()).unwrap();
+        let mut d = self.data.clone();
+        
+        let mut all = self.chunk_type.bytes().to_vec();
 
-        all.insert_str(0, self.chunk_type.to_string().as_str());
+        all.append(&mut  d);
 
-        checksum_ieee(all.as_bytes())
+        checksum_ieee(&all[..])
     }
 
     /// Returns the data stored in this chunk as a `String`. This function will return an error
@@ -69,7 +71,8 @@ impl Chunk {
     /// 3. The data itself *(`length` bytes)*
     /// 4. The CRC of the chunk type and data *(4 bytes)*
     pub fn as_bytes(&self) -> Vec<u8> {
-        let mut all: Vec<u8> = self.data.len().to_be_bytes().to_vec();
+        let bytes = self.length().to_be_bytes();
+        let mut all: Vec<u8> = bytes.to_vec();
         all.append(&mut self.chunk_type.bytes().to_vec());
         all.append(&mut self.data.clone());
         all.append(&mut self.crc.to_vec());
