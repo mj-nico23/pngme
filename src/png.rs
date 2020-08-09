@@ -3,11 +3,12 @@
 use std::convert::TryFrom;
 use std::fmt;
 use std::fs::File;
+use std::io::prelude::*;
 use std::io::{BufReader, Read};
 use std::path::Path;
 
-use crate::chunk::Chunk;
-use crate::chunk_type::ChunkType;
+pub use crate::chunk::Chunk;
+pub use crate::chunk_type::ChunkType;
 use crate::Result;
 
 /// A PNG container as described by the PNG spec
@@ -30,15 +31,34 @@ impl Png {
 
     /// Creates a `Png` from a file path
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let f = File::open(path)?;
+        let file = File::open(path)?;
 
-        let mut v: Vec<u8> = vec![];
+        let mut reader = BufReader::new(file);
+        let mut buf: Vec<u8> = vec![];
 
-        for byte in f.bytes() {
-            v.push(byte.unwrap());
-        }
+        reader.read_to_end(&mut buf).expect("error reading file");
 
+        let v = buf.as_slice();
+        
         Ok(Png::try_from(&v[..]).expect("error reading bytes"))
+    }
+
+    pub fn save_file<P: AsRef<Path>>(&mut self, path: P) -> std::io::Result<()> {
+
+        // Open a file in write-only mode, returns `io::Result<File>`
+        let mut file = match File::create(&path) {
+            Err(why) => panic!("couldn't write: {}", why),
+            Ok(file) => file,
+        };
+
+        // Write the `LOREM_IPSUM` string to `file`, returns `io::Result<()>`
+        match file.write_all(&self.as_bytes()) {
+            Err(why) => panic!("couldn't write to file: {}", why),
+            Ok(_) => {
+                println!("successfully wrote to file");
+                Ok(())
+            },
+        }
     }
 
     /// Appends a chunk to the end of this `Png` file's `Chunk` list.
@@ -121,18 +141,28 @@ impl TryFrom<&[u8]> for Png {
             let mut chunk_type: ChunkType = ChunkType::try_from([0; 4]).unwrap();
             let mut chunk: Vec<u8> = vec![];
 
-            let size = data_length as usize;
-            let mut b = vec![0u8; size];
+            let mut size = if data_length > 2048 { 2048 } else { data_length as usize };
 
             let mut header_reader = false;
+            
             while data_length > data_count || !header_reader {
                 if header_reader == false {
                     let b_reads = reader.read(&mut buf).expect("error reading chunk");
                     chunk_type = ChunkType::try_from(buf).unwrap();
                     header_reader = true;
                 } else if data_length > 0 {
+                    
+                    if data_length - data_count < 2048 {
+                        size = (data_length - data_count) as usize;
+                    }
+
+                    let mut b = vec![0u8; size];
                     let b_reads = reader.read(&mut b).expect("error reading chunk");
-                    chunk.append(&mut b);
+                    if b.len() > b_reads {
+                        chunk.append(&mut b[..b_reads].to_vec());
+                    } else {
+                        chunk.append(&mut b);
+                    }
                     data_count += b_reads as u32;
                 } else {
                     break;
@@ -142,6 +172,8 @@ impl TryFrom<&[u8]> for Png {
             let b_reads = reader.read(&mut buf).expect("error reading ccc");
 
             if u32::from_be_bytes(buf) != p.crc() {
+                println!("{:?}", p.as_bytes());
+                println!("crc error: expected {}, get {}", u32::from_be_bytes(buf), p.crc());
                 return Err("chunk type error");
             }
 

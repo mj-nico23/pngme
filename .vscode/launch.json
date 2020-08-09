@@ -9,7 +9,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/target/debug/pngme1",
-            "args": [],
+            "args": ["encode", "./images/bulb.png", "rUST", "some text"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],

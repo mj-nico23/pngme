@@ -16,18 +16,16 @@ fn main() -> Result<()> {
 
     match png_args {
         PngMeArgs::Encode(x) => {
-            println!("{:?}", x);
+            commands::encode(x)
         },
         PngMeArgs::Decode(x) => {
-            println!("{:?}", x);
+            commands::decode(x)
         },
         PngMeArgs::Remove(x) => {
-            println!("{:?}", x);
+            commands::remove(x)
         },
         PngMeArgs::Print(x) => {
-            println!("{:?}", x);
+            commands::print_chunks(x)
         }
     }
-
-    Ok(())
 }
